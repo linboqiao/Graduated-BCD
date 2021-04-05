@@ -14,7 +14,7 @@
 
 int main() {
 	printf("start!\n");
-	int d = 2000, n = 20, m = 5;
+	int d = 1000, n = 20, m = 5;
 
 	//input data
 	MatrixXd X = MatrixXd::Zero(n,d);		// array of size nxd
@@ -40,29 +40,64 @@ int main() {
 	MatrixXd trace_obj  = MatrixXd::Zero(num_iters,1);
 	MatrixXd trace_time = MatrixXd::Zero(num_iters,1);
 
-	int n_exp = 4;
-	int n_threads[] = {1,2,4,8};
-	for(int i = n_exp; i>=0;i--)
+	for (int idx_method =0; idx_method<8;idx_method++)
 	{
-		int num_threads = n_threads[i];
-		printf("num_threads: %d\n",num_threads);
-		double time_start = timing();
-		ABCDEF_coord_rand_asynchronous(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
+		int n_threads[] = {1,2,4,8};
+		int n_thread = 4;
+		for(int i = n_thread-1; i>=0;i--)
+		{
+			int num_threads = n_threads[i];
+			printf("num_threads: %d\n",num_threads);
+			double time_start = timing();
+			switch(idx_method)
+			{
+				case 0:
+				ABCDEF(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
 				&iters, &trace_beta, &trace_obj, &trace_time, m, n, d, num_threads, funcname);
-		double time_end = timing();
+				break;
+				case 1:
+				ABCDEF_coord_cyclic(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
+				&iters, &trace_beta, &trace_obj, &trace_time, m, n, d, num_threads, funcname);
+				break;
+				case 2:
+				ABCDEF_coord_cyclic_asynchronous(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
+				&iters, &trace_beta, &trace_obj, &trace_time, m, n, d, num_threads, funcname);
+				break;
+				case 3:
+				ABCDEF_coord_cyclic_distributed(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
+				&iters, &trace_beta, &trace_obj, &trace_time, m, n, d, num_threads, funcname);
+				break;
+				case 4:
+				ABCDEF_coord_cyclic_distributed_asynchronous(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
+				&iters, &trace_beta, &trace_obj, &trace_time, m, n, d, num_threads, funcname);
+				break;
+				case 5:
+				ABCDEF_coord_rand_distributed(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
+				&iters, &trace_beta, &trace_obj, &trace_time, m, n, d, num_threads, funcname);
+				break;
+				case 6:
+				ABCDEF_coord_rand_distributed_asynchronous(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
+				&iters, &trace_beta, &trace_obj, &trace_time, m, n, d, num_threads, funcname);
+				break;
+				case 7:
+				ABCDEF_coord_rand_asynchronous(&X, &C, &Y, &b, lambda, regtype, theta, maxiter,\
+				&iters, &trace_beta, &trace_obj, &trace_time, m, n, d, num_threads, funcname);
+				break;
+			}
+			double time_end = timing();
 
-		char resultFile[255]= {0};
-		sprintf(resultFile, "result_%s_%d_mu%d_d%d_n%d_m%d.csv",\
-				funcname, num_threads, (int)(lambda*10), d, n, m);
-		printf("result file name %s\n", resultFile);
-		//write_to_csv(resultFile, &iters, &trace_beta, &trace_obj, &trace_time);
+			char resultFile[255]= {0};
+			sprintf(resultFile, "result_%s_%d_mu%d_d%d_n%d_m%d.csv",\
+					funcname, num_threads, (int)(lambda*10), d, n, m);
+			//printf("result file name %s\n", resultFile);
+			//write_to_csv(resultFile, &iters, &trace_beta, &trace_obj, &trace_time);
 
-		double elapsetime = time_end - time_start;
-		printf("time start  is \t%g\n", time_start);
-		printf("time end    is \t%g\n", time_end);
-		printf("time elapse is \t%g\n\n", elapsetime);
+			double elapsetime = time_end - time_start;
+			printf("time start  is \t%g\n", time_start);
+			printf("time end    is \t%g\n", time_end);
+			printf("time elapse is \t%g\n\n", elapsetime);
+		}
 	}
-
 	return 0;
 }
 

@@ -10,7 +10,7 @@
 #include "omp.h"
 #include "ulti.h"
 
-int ABCDEF_coord_rand_asynchronous(MatrixXd *A, MatrixXd *C, MatrixXd *Y, MatrixXd *b,\
+int ABCDEF_coord_rand_distributed_asynchronous(MatrixXd *A, MatrixXd *C, MatrixXd *Y, MatrixXd *b,\
 		double lambda, int regtype, double theta, int maxiter,\
 		MatrixXd *iters, MatrixXd *trace_beta, MatrixXd *trace_obj, MatrixXd *trace_time,\
 		int m, int n, int d, int n_threads, char *funcname)
@@ -34,14 +34,14 @@ int ABCDEF_coord_rand_asynchronous(MatrixXd *A, MatrixXd *C, MatrixXd *Y, Matrix
 
 
 	MatrixXd CT  = C->adjoint();
-	//MatrixXd CCT = (*C)*(C->adjoint());
+	MatrixXd CCT = (*C)*(C->adjoint());
 	MatrixXd terror = MatrixXd::Zero(n, 1);
 	MatrixXd tobj   = MatrixXd::Zero(5, 1);
 
 	int k = 0;
 	int j = 0;
 	int iter_outer = 0;
-	int	inneriter = 1;
+	int	inneriter = 0.01*d;
 	double x_temp = 0;
 
 	printf("start iterate\n");
@@ -59,26 +59,27 @@ int ABCDEF_coord_rand_asynchronous(MatrixXd *A, MatrixXd *C, MatrixXd *Y, Matrix
 		{
 			x_pre = x;
 			//s = 1./(b-C*x);
-			//s = ((*b)-(*C)*x).cwiseInverse();
+			s = ((*b)-(*C)*x).cwiseInverse();
 
 			//H = 2*(L(idx) + nu*s'*CCT*s);
-			//H = 2*(L + (nu*(s.adjoint())*CCT*s)(0,0));
-			H = 2*L;
+			H = 2*(L + (nu*(s.adjoint())*CCT*s)(0,0));
 
 			omp_set_num_threads(n_threads);
             #pragma omp parallel proc_bind(spread) num_threads(n_threads) //shared(x, AT, A, Y, nu, CT, s, H, lambda, theta,x_temp)
 			{
-				int lb = 0, ub =d-1;
+				int icur = omp_get_thread_num();
+				int numT = floor(d/n_threads)+1;
+				int lb = icur*numT;
+				int ub = (icur+1)*numT-1;
+				if (ub>d-1)
+					ub = d-1;
 
 				//x(idx) = proximalRegC( (A(:,idx)'*(A*x-y) + nu*C(:,idx)'*s)/H, 1, mu/H, theta, regtype);
 				#pragma omp for
 				for(int idx_d=lb;idx_d<=ub;idx_d++)
 				{
 					int idx = rand()%d;
-					for(int ti=0;ti<10;ti++){MatrixXd CCT = (*C)*(C->adjoint());}
-					//x_temp = x(idx,0)-( ((AT.row(idx))*((*A)*x-(*Y)))(0,0) + nu*((CT.row(idx))*s)(0,0) )/H;
-					//x_temp = x(idx,0)-( ((AT.row(idx))*((*A)*x-(*Y)))(0,0))/H;
-					x_temp = (*Y)(idx,0);
+					x_temp = x(idx,0)-( ((AT.row(idx))*((*A)*x-(*Y)))(0,0) + nu*((CT.row(idx))*s)(0,0) )/H;
 					double xtt = 0;
 					proximalSCAD_d(&xtt, &x_temp, 1, lambda/H, theta);
 					x(idx) = xtt;
@@ -106,6 +107,7 @@ int ABCDEF_coord_rand_asynchronous(MatrixXd *A, MatrixXd *C, MatrixXd *Y, Matrix
 			Num_i = 0;
 		}
 		printf("iter_outer, %d, obj, %.7f, time cost, %.7f\n",(int)(*iters)(iter_outer,0), (*trace_obj)(iter_outer,0), (*trace_time)(iter_outer,0));
+
 		iter_outer += 1;
 
 		// Stopping Criterion
@@ -116,7 +118,6 @@ int ABCDEF_coord_rand_asynchronous(MatrixXd *A, MatrixXd *C, MatrixXd *Y, Matrix
 			double max_err = (tobj.array().abs().maxCoeff());
 			if( max_err < tol)
 				return 0;
-			//if ((*trace_obj)(iter_outer, 0) > (*trace_obj)(iter_outer-1,0)) return 0;
 		}
 	}
 	return 0;
