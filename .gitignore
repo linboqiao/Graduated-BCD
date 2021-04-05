@@ -30,3 +30,6 @@
 
 # project files
 .vscode
+
+# bin
+main
